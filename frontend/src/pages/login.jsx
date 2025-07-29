@@ -5,12 +5,12 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 
 const LoginRegisterPage = () => {
-  const navigate   = useNavigate();
-  const { login }  = useAuth();                // from AuthContext
+  const navigate = useNavigate();
+  const { login } = useAuth();                // from AuthContext
   const [isSignUpActive, setIsSignUpActive] = useState(false);
 
-  const handleSignInClick  = () => setIsSignUpActive(false);
-  const handleSignUpClick  = () => setIsSignUpActive(true);
+  const handleSignInClick = () => setIsSignUpActive(false);
+  const handleSignUpClick = () => setIsSignUpActive(true);
 
   /** -------------------------------------------------
    *  Handle submit for BOTH “Sign In” and “Sign Up”
@@ -18,34 +18,32 @@ const LoginRegisterPage = () => {
   const handleFormSubmit = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    const data     = Object.fromEntries(formData.entries());
+    const data = Object.fromEntries(formData.entries());
 
     /* Choose endpoint */
     const url = isSignUpActive
       ? 'http://localhost:8000/auth/signup'
       : 'http://localhost:8000/auth/login';
 
-   try {
-  console.log("🔄 Sending login/signup request to:", url);
-  const res = await axios.post(url, data);
-  console.log("✅ Received response:", res.data);
+    try {
 
-  const token = res.data.token;
-  if (!token) throw new Error("❌ No token returned from backend");
+      const res = await axios.post(url, data);
 
-  console.log("🔐 Saving token:", token);
-  localStorage.setItem("token", token);
+      const token = res.data.token;
+      if (!token) throw new Error("❌ No token returned from backend");
 
-  login(token);
-  navigate("/app");
-} catch (err) {
-  console.error("❌ Error during auth:", err);
-  const msg =
-    err.response?.data?.detail ||
-    err.response?.data?.message ||
-    "Something went wrong. Try again.";
-  alert(msg);
-}
+      localStorage.setItem("token", token);
+
+      login(token);
+      navigate("/app");
+    } catch (err) {
+      console.error("❌ Error during auth:", err);
+      const msg =
+        err.response?.data?.detail ||
+        err.response?.data?.message ||
+        "Something went wrong. Try again.";
+      alert(msg);
+    }
 
   };
 
@@ -99,8 +97,8 @@ const LoginRegisterPage = () => {
           <form onSubmit={handleFormSubmit} className="bg-white h-full flex justify-center items-center flex-col px-10 text-center">
             <h1 className="font-extrabold text-4xl mb-2">Sign in</h1>
             <p className="text-sm text-gray-500 mb-4">with your HR credentials</p>
-            <input name="email" className="bg-gray-200 border-none p-3 my-2 w-full" type="email" placeholder="Email" />
-            <input name="password" className="bg-gray-200 border-none p-3 my-2 w-full" type="password" placeholder="Password" />
+            <input name="email" className="bg-gray-200 border-none p-3 my-2 w-full" type="email" placeholder="Email" autoComplete="username"/>
+            <input name="password" className="bg-gray-200 border-none p-3 my-2 w-full" type="password" placeholder="Password" autoComplete="current-password"/>
             <a href="#" className="text-sm my-3">Forgot your password?</a>
             <button type="submit" className="rounded-full border border-[#FF4B2B] bg-[#FF4B2B] text-white text-xs font-bold py-3 px-12 uppercase tracking-wider transition-transform duration-75 ease-in active:scale-95">
               Sign In

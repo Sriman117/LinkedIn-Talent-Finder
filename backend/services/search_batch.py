@@ -1,26 +1,20 @@
 import os
-import time
 import json
 from typing import List
 from pydantic import BaseModel, Field
-from InstructorEmbedding import INSTRUCTOR
-from qdrant_client import QdrantClient
-from qdrant_client.models import PointStruct, VectorParams, Distance
-from langchain.output_parsers import StructuredOutputParser
+from langchain.output_parsers import PydanticOutputParser
 from langchain.prompts import load_prompt
 from langchain_groq import ChatGroq
-from langchain.output_parsers import PydanticOutputParser
 from config import settings
+from utils.qdrant_client_wrapper import qdrant_client
+from qdrant_client.models import PointStruct
+from utils.logger import logger
+from utils.model_loader import model
 
-# === CONFIG ===
-QDRANT_COLLECTION = "llm_qdrant_llm"
-QDRANT_HOST = "localhost"
-QDRANT_PORT = 6333
+# === LLM & Prompt Setup ===
 GROQ_MODEL = "llama-3.3-70b-versatile"
 BATCH_SIZE = 20
-api = settings.api
 
-# === Pydantic Schema for Output ===
 class CandidateScore(BaseModel):
     id: str = Field(description="The document ID of the candidate")
     score: int = Field(ge=1, le=100, description="Match score from 1 to 100")
@@ -30,29 +24,27 @@ class CandidateScores(BaseModel):
 
 parser = PydanticOutputParser(pydantic_object=CandidateScores)
 
-# === Load structured prompt ===
-current_dir = os.path.dirname(os.path.abspath(__file__))
-prompt_path = os.path.join(current_dir, "structured_ranking_prompt.json")
+prompt_path = os.path.join(os.path.dirname(__file__), "structured_ranking_prompt.json")
 prompt = load_prompt(prompt_path)
 
 llm = ChatGroq(
     model=GROQ_MODEL,
     temperature=0,
-    api_key=os.getenv("GROQ_API_KEY", api)
+    api_key=settings.api
 )
 
 chain = prompt | llm | parser
 
-# === Qdrant and Embedding Setup ===
-qdrant = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=30.0)
-embedder = INSTRUCTOR("hkunlp/instructor-large")
+# === Embedding and Qdrant Setup ===
+embedder = model
+qdrant = qdrant_client
 
 def run_search_pipeline(job_description: str, top_k: int = 10) -> List[CandidateScore]:
     query_instruction = "Represent the job description for matching resumes:"
     query_vector = embedder.encode([[query_instruction, job_description]])[0].tolist()
 
     search_results = qdrant.query_points(
-        collection_name=QDRANT_COLLECTION,
+        collection_name=settings.qdrant_collection,
         query=query_vector,
         score_threshold=0.55,
         with_payload=True,
@@ -63,7 +55,7 @@ def run_search_pipeline(job_description: str, top_k: int = 10) -> List[Candidate
         {
             "id": p.payload.get("document_id"),
             "skills": p.payload.get("skills", []),
-            "roles": p.payload.get("roles", []),
+            "roles": p.payload.get("prev_roles", []),  # fixed key
             "experience": p.payload.get("experience", 0),
         }
         for p in search_results
@@ -82,6 +74,6 @@ def run_search_pipeline(job_description: str, top_k: int = 10) -> List[Candidate
             })
             all_ranked.extend(result.results)
         except Exception as e:
-            print(f"⚠️ Batch {i//BATCH_SIZE + 1} failed: {e}")
+            logger.warning(f"⚠️ Batch {i//BATCH_SIZE + 1} failed: {e}")
 
     return sorted(all_ranked, key=lambda x: x.score, reverse=True)[:top_k]
